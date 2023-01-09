@@ -1,4 +1,0 @@
-onnxruntime==1.8.1
-numpy==1.19.2
-tokenizers==0.10.3
-pika==1.2.0

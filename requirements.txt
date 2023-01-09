@@ -1,11 +1,6 @@
-pytorch_lightning==1.4.1
-onnxruntime==1.8.1
-tqdm==4.60.0
-pydantic==1.8.2
-numpy==1.19.2
-tokenizers==0.10.3
-pika==1.2.0
-pandas==1.2.4
-torch==1.8.1
-scikit_learn==0.24.2
-discord.py==1.7.3
+tqdm~=4.64.1
+numpy~=1.24.1
+tokenizers~=0.13.2
+pandas~=1.5.2
+torch~=1.13.1
+onnxruntime~=1.13.1

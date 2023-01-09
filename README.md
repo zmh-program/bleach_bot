@@ -1,38 +1,26 @@
 # bleach_bot
-A bot that can detect and automatically delete negative or toxic messages on a discord server.
 
-## BOT config on discord:
-Go to:
-
-https://www.freecodecamp.org/news/create-a-discord-bot-with-python/
-
-Do all the steps needed to get your token and invite your bot to a discord server.
-
-Create a .env file with the following content:
-```
-TOKEN=YOUR_TOKEN
-```
-
-## Run:
-```
-wget https://github.com/CVxTz/bleach_bot/releases/download/v1/toxicity_model.onnx -P ./data/
-wget https://github.com/CVxTz/bleach_bot/releases/download/v1/tokenizer.json -P ./data/
-docker-compose up --build
-```
+A bot that can detect negative or toxic messages
 
 ## Data:
+
 https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data
 
 ## Train the tokenizer
+
 ```
 python bleach_bot/ml/train_tokenizer.py --files YOUR_TEXT_FILES
 ```
+
 ## Train the model
+
 ```
 python bleach_bot/ml/train_toxicity_classifier.py --tokenizer data/tokenizer.json \
                                                   --data_path data/train.csv
 ```
+
 ## Convert the model to onnx
+
 ```
 python bleach_bot/ml/torch_to_onnx.py --tokenizer data/tokenizer.json \
                                       --model_path data/toxicity_model.ckpt \
@@ -53,10 +41,6 @@ In this project, we are going to train such model using Jigsaw Toxic Comment
 Data-set:
 [https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data)
 
-Then, we are going to make it so this model is callable from a [Discord
-bot](https://discord.com/developers/docs/intro) that is going to delete all the
-messages that the model flagged as being toxic.
-
 ### Data
 
 The Jigsaw toxicity data includes 159,000 samples, each sample can be labeled
@@ -68,13 +52,12 @@ with multiple categories like “toxic”, “insult”…
 For simplicity, we use all those categories to create a single binary target as
 follows :
 
-    data["label"] = (
-        data[
-            ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
-        ].sum(axis=1, skipna=True)
-        > 0.5
-    ).astype(int)
-
+data["label"] = (
+    data[
+        ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
+    ].sum(axis=1, skipna=True)
+    > 0.5
+).astype(int)
 ### Machine Learning steps
 
 ![](https://cdn-images-1.medium.com/max/800/1*cDb11CVFNraftKnD6yQ3Mg.png)
@@ -85,8 +68,7 @@ follows :
 I trained my own BPE tokenizer using huggingface’s library, you can do the same
 using the script in my Github repository:
 
-    python bleach_bot/ml/train_tokenizer.py --files YOUR_TEXT_FILES
-
+python bleach_bot/ml/train_tokenizer.py --files YOUR_TEXT_FILES
 This tokenizer breaks the sentence into small tokens and then maps each of them
 to integers:
 
@@ -103,44 +85,43 @@ We use a transformer network as a classifier:
 The implementation is made easy by using the torch.nn.TransformerEncoderLayer
 and torch.nn.TransformerEncoder classes.
 
-    class TextBinaryClassifier(pl.LightningModule):
-        def __init__(
-            self,
-            vocab_size,
-            channels=256,
-            dropout=0.4,
-            lr=1e-4,
-        ):
-            super().__init__()
-            self.lr = lr
-            self.dropout = dropout
-            self.vocab_size = vocab_size
-            self.embeddings = torch.nn.Embedding(self.vocab_size, embedding_dim=channels)
-            self.pos_embedding = torch.nn.Embedding(1024, embedding_dim=channels)
-            encoder_layer = nn.TransformerEncoderLayer(
-                d_model=channels, nhead=4, dropout=self.dropout, dim_feedforward=1024
-            )
-            self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=8)
-            self.linear = Linear(channels, 1)
-            self.do = nn.Dropout(p=self.dropout)
-            self.loss = torch.nn.BCEWithLogitsLoss()
-        def forward(self, x):
-            batch_size, sequence_len = x.size(0), x.size(1)
-            embedded = self.embeddings(x)
-            pos_x = (
-                torch.arange(0, sequence_len, device=x.device)
-                .unsqueeze(0)
-                .repeat(batch_size, 1)
-            )
-            pos_x = self.pos_embedding(pos_x)
-            embedded += pos_x
-            embedded = self.do(embedded)
-            embedded = embedded.permute(1, 0, 2)
-            transformed = self.encoder(embedded)
-            transformed = transformed.permute(1, 0, 2)
-            out = self.linear(transformed[:, 0])
-            return out
-
+class TextBinaryClassifier(pl.LightningModule):
+    def __init__(
+        self,
+        vocab_size,
+        channels=256,
+        dropout=0.4,
+        lr=1e-4,
+    ):
+        super().__init__()
+        self.lr = lr
+        self.dropout = dropout
+        self.vocab_size = vocab_size
+        self.embeddings = torch.nn.Embedding(self.vocab_size, embedding_dim=channels)
+        self.pos_embedding = torch.nn.Embedding(1024, embedding_dim=channels)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=channels, nhead=4, dropout=self.dropout, dim_feedforward=1024
+        )
+        self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=8)
+        self.linear = Linear(channels, 1)
+        self.do = nn.Dropout(p=self.dropout)
+        self.loss = torch.nn.BCEWithLogitsLoss()
+    def forward(self, x):
+        batch_size, sequence_len = x.size(0), x.size(1)
+        embedded = self.embeddings(x)
+        pos_x = (
+            torch.arange(0, sequence_len, device=x.device)
+            .unsqueeze(0)
+            .repeat(batch_size, 1)
+        )
+        pos_x = self.pos_embedding(pos_x)
+        embedded += pos_x
+        embedded = self.do(embedded)
+        embedded = embedded.permute(1, 0, 2)
+        transformed = self.encoder(embedded)
+        transformed = transformed.permute(1, 0, 2)
+        out = self.linear(transformed[:, 0])
+        return out
 ### Predictor
 
 #### **Torch to onnx**
@@ -151,21 +132,20 @@ prediction.
 
 To do that we run:
 
-    torch.onnx.export(
-        model,  # model being run
-        ids,  # model input (or a tuple for multiple inputs)
-        filepath,  # where to save the model (can be a file or file-like object)
-        export_params=True,  # store the trained parameter weights inside the model file
-        opset_version=10,  # the ONNX version to export the model to
-        do_constant_folding=True,  # whether to execute constant folding for optimization
-        input_names=["input"],  # the model's input names
-        output_names=["output"],  # the model's output names
-        dynamic_axes={
-            "input": {0: "batch_size", 1: "sequence_len"},  # variable length axes
-            "output": {0: "batch_size"},
-        },
-    )
-
+torch.onnx.export(
+    model,  # model being run
+    ids,  # model input (or a tuple for multiple inputs)
+    filepath,  # where to save the model (can be a file or file-like object)
+    export_params=True,  # store the trained parameter weights inside the model file
+    opset_version=10,  # the ONNX version to export the model to
+    do_constant_folding=True,  # whether to execute constant folding for optimization
+    input_names=["input"],  # the model's input names
+    output_names=["output"],  # the model's output names
+    dynamic_axes={
+        "input": {0: "batch_size", 1: "sequence_len"},  # variable length axes
+        "output": {0: "batch_size"},
+    },
+)
 Doing this process allows to reduce the size of the model by 66% and improve the
 prediction speed on CPU by 68% ( from 2.63ms to 0.85ms to produce a prediction
 for a small sentence).
@@ -187,17 +167,14 @@ repository:
 
 First, get your bot token by following this tutorial:
 
-
 Then, download the model and tokenizer:
 
-    wget https://github.com/CVxTz/bleach_bot/releases/download/v1/toxicity_model.onnx -P ./data/
+wget https://github.com/CVxTz/bleach_bot/releases/download/v1/toxicity_model.onnx -P ./data/
 
-    wget https://github.com/CVxTz/bleach_bot/releases/download/v1/tokenizer.json -P ./data/
-
+wget https://github.com/CVxTz/bleach_bot/releases/download/v1/tokenizer.json -P ./data/
 Finally, run docker-compose
 
-    docker-compose up --build
-
+docker-compose up --build
 ### Bot Demo
 
 The bot deletes all the messages that are given a score greater than 0.8 by the
